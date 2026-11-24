@@ -36,7 +36,9 @@ public class AgenteDePedidosFunctions
     // Versão que trata cada tipo de falha
     // ------------------------------------------------------------------
 
-    [SkailFunction]
+    // retryCount 3 na function (o padrão é 15) só para a demonstração: assim a execução
+    // do bloco 3, que para em ResponderCliente, chega na dead letter queue em minutos.
+    [SkailFunction(retryCount: 3)]
     public async SkailTask<int> ProcessarPedido(string pedidoId)
     {
         var pedido = await LerPedido(pedidoId);

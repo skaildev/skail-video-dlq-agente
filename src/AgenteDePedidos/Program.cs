@@ -17,6 +17,10 @@ builder.Services.AddHttpClient("simuladores", client =>
     client.Timeout = TimeSpan.FromSeconds(5);
 });
 
+// Esconde os logs de cada chamada HTTP ("Start processing HTTP request ...") para a
+// linha do tempo do Monitor mostrar só os passos e as exceções.
+builder.Logging.AddFilter("System.Net.Http.HttpClient", LogLevel.Warning);
+
 builder.UseSkail();
 
 await builder.Build().RunAsync();

@@ -4,10 +4,12 @@ Código de apoio do vídeo do canal da skail. É um agente que lê um pedido rec
 
 O LLM, o estoque, o ERP e o e-mail são serviços simulados (`src/Simuladores`), para que cada falha aconteça na hora em que você quiser.
 
+**Teste com um caso real. 300 mil ações/mês grátis, sem cartão.** [Começar grátis em 5 minutos →](https://dash.skail.dev)
+
 ## O que tem aqui
 
 - `src/AgenteDePedidos`: o workload `dlqagente:v1.0.0`, com duas functions.
-  - `ProcessarPedido` trata cada tipo de falha do jeito que o vídeo mostra.
+  - `ProcessarPedido` trata cada tipo de falha do jeito que o vídeo mostra. A function tem `retryCount: 3` em vez dos 15 padrão, para a execução do bloco 3 chegar na DLQ em minutos.
   - `ProcessarPedidoRetryPadrao` usa o retry padrão nos commands e lança exceção para falha de negócio. Serve para ver no Monitor o que vai parar na dead letter queue sem precisar. Só a function dela tem `retryCount: 3` em vez dos 15 padrão: com o padrão, as reentregas têm intervalo crescente e a execução leva horas para chegar na DLQ.
 - `src/Simuladores`: API em `http://localhost:5080` com a caixa de entrada, o LLM, o estoque, a média do cliente, o ERP (idempotente pelo header `Idempotency-Key`), a fila de revisão e o e-mail.
 - `scripts`: um script por bloco do vídeo, em PowerShell (`.ps1`) e bash (`.sh`), mais os scripts para disparar uma execução, trocar o modo dos simuladores e disparar a revisão.
@@ -31,7 +33,7 @@ O LLM, o estoque, o ERP e o e-mail são serviços simulados (`src/Simuladores`),
 
 - .NET 10 SDK.
 - O pacote de build do skail (`Skail.Platform.Runtime.Build` 2.3.1) roda uma ferramenta feita para o .NET 8. Se a máquina tiver só o .NET 10, rode o build com `DOTNET_ROLL_FORWARD=Major`, ou instale o runtime do .NET 8.
-- Conta no [dash.skail.dev](https://dash.skail.dev) com um environment e o workload `dlqagente` versão `1.0.0` criado em Workloads.
+- Conta no [dash.skail.dev](https://dash.skail.dev) (grátis, sem cartão) com um environment e o workload `dlqagente` versão `1.0.0` criado em Workloads.
 
 ## Como rodar
 
