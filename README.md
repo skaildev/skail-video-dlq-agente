@@ -68,7 +68,10 @@ O LLM, o estoque, o ERP e o e-mail são serviços simulados (`src/Simuladores`),
 | 1. Provedor do LLM fora do ar | `bloco1-provedor-fora` | O LLM responde 503. As execuções `ProcessarPedidoRetryPadrao` gastam as tentativas e vão para a dead letter queue. As `ProcessarPedido` ficam aguardando o delay de 2 minutos e concluem quando o LLM volta (`modo llm normal`). As que caíram na DLQ voltam com "Retentar tudo que casa com o filtro". |
 | 2. Resposta inválida que se repete | `bloco2-resposta-invalida` | O LLM devolve o SKU 88412-X, que não existe. A versão com retry padrão repete a mesma exceção até cair na DLQ. A versão tratada fica aguardando o evento `PEDIDO_REVISADO`, que o `revisar` dispara. |
 | 3. Falha depois da ação | `bloco3-falha-depois-da-acao` | O pedido é criado no ERP e o e-mail estoura o timeout. Depois de `modo email normal`, o Retentar continua de `ResponderCliente`, e o ERP continua com um pedido só. |
+| 3. Falha depois da ação, versão de infraestrutura | `bloco3-aplicacao-cai` | Rode o agente com `manter-agente-no-ar`. O pedido é criado no ERP e a aplicação cai no `ResponderCliente`. O skail entrega a execução de novo uns 10 minutos depois de cada queda, e a cada entrega ela cai no mesmo passo. Depois de 5 entregas sem resposta, a execução vai para a Dead letter queue (no teste de 24/11/2026, o PED-3401 entrou na DLQ 1h50 depois do disparo). O ERP continua com um pedido só. Para retomar: `modo email normal` e Retentar na DLQ. |
 | 4. Sucesso errado | `bloco4-sucesso-errado` | O LLM lê 100 caixas como 1.000. A versão sem regra de negócio grava 1.000 no ERP e nada aparece na DLQ. A versão tratada barra na regra (1.000 passa do limite de 800) e espera a revisão. Os itens aprovados na revisão passam de novo pelo estoque e pela regra antes de ir para o ERP. |
+
+Só exceções que o runtime grava como falha terminam em Falhou; quem vai para a Dead letter queue é a execução entregue várias vezes sem resposta (aplicação caindo ou sem responder).
 
 Os scripts usam ids fixos (PED-2101, PED-2202 e assim por diante), e o ERP usa o id do pedido como chave de idempotência. Antes de repetir uma tomada, rode `./scripts/reset.sh` (ou `.\scripts\reset.ps1`) para zerar os simuladores.
 
@@ -84,6 +87,7 @@ Para conferir o lado de fora: `http://localhost:5080/erp/pedidos`, `/emails`, `/
 ./scripts/modo.sh llm sku-invalido      # troca o primeiro SKU por 88412-X
 ./scripts/modo.sh llm quantidade-errada # multiplica a primeira quantidade por 10
 ./scripts/modo.sh email timeout         # o e-mail demora 15 s; o agente desiste em 5 s
+./scripts/modo.sh email derrubar        # o agente encerra o próprio processo ao mandar o e-mail
 ./scripts/modo.sh email normal
 ```
 

@@ -46,7 +46,8 @@ app.MapGet("/controle", () => Results.Ok(new
     chamadasLlm = estado.ChamadasLlm,
     pedidosNoErp = estado.PedidosErp.Count,
     emails = estado.Emails.Count,
-    revisoes = estado.Revisoes.Count
+    revisoes = estado.Revisoes.Count,
+    quedas = estado.Quedas
 }));
 
 // ---------------------------------------------------------------- caixa de entrada
@@ -138,8 +139,16 @@ app.MapPost("/revisoes", (PedidoEmRevisao entrada) =>
 
 app.MapGet("/revisoes", () => Results.Ok(estado.Revisoes.OrderBy(r => r.Em)));
 
-app.MapPost("/email/enviar", async (Email entrada) =>
+app.MapPost("/email/enviar", async (Email entrada, HttpContext ctx) =>
 {
+    if (estado.ModoEmail == "derrubar")
+    {
+        // O agente encerra o próprio processo ao ver este header (SimulacaoDeQuedaHandler).
+        Interlocked.Increment(ref estado.Quedas);
+        app.Logger.LogWarning("E-mail de {PedidoId}: derrubando a aplicação (queda {N})", entrada.PedidoId, estado.Quedas);
+        ctx.Response.Headers["X-Simulador-Derrubar"] = "1";
+        return Results.StatusCode(503);
+    }
     if (estado.ModoEmail == "timeout")
     {
         // O agente usa timeout de 5 s; o simulador demora 15 s para responder.
@@ -150,6 +159,16 @@ app.MapPost("/email/enviar", async (Email entrada) =>
     app.Logger.LogInformation("E-mail para {PedidoId}: {Assunto}", entrada.PedidoId, entrada.Assunto);
     return Results.Ok();
 });
+
+// Experimentos de DLQ: conta quantas vezes cada passo foi executado.
+var contagens = new ConcurrentDictionary<string, int>();
+app.MapGet("/experimentos/{id}/passo", (string id) =>
+{
+    var n = contagens.AddOrUpdate(id, 1, (_, v) => v + 1);
+    app.Logger.LogWarning("Experimento {Id}: execução {N}", id, n);
+    return Results.Ok(n);
+});
+app.MapGet("/experimentos", () => Results.Ok(contagens));
 
 app.MapGet("/emails", () => Results.Ok(estado.Emails.OrderBy(e => e.Em)));
 
@@ -165,12 +184,13 @@ record Email(string PedidoId, string Assunto, string Corpo, DateTime Em = defaul
 class Estado
 {
     public static readonly HashSet<string> ModosLlm = ["normal", "fora", "sobrecarga", "limite", "sku-invalido", "quantidade-errada"];
-    public static readonly HashSet<string> ModosEmail = ["normal", "timeout"];
+    public static readonly HashSet<string> ModosEmail = ["normal", "timeout", "derrubar"];
 
     public volatile string ModoLlm = "normal";
     public volatile string ModoEmail = "normal";
     public int ChamadasLlm;
     public int ProximoNumero = 4710;
+    public int Quedas;
     public readonly ConcurrentBag<PedidoErp> PedidosErp = [];
     public readonly ConcurrentDictionary<string, PedidoErp> PorChave = new();
     public readonly ConcurrentBag<PedidoEmRevisao> Revisoes = [];

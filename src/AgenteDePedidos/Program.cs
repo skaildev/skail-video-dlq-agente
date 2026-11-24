@@ -15,7 +15,7 @@ builder.Services.AddHttpClient("simuladores", client =>
 {
     client.BaseAddress = new Uri(simuladores);
     client.Timeout = TimeSpan.FromSeconds(5);
-});
+}).AddHttpMessageHandler(() => new AgenteDePedidos.SimulacaoDeQuedaHandler());
 
 // Esconde os logs de cada chamada HTTP ("Start processing HTTP request ...") para a
 // linha do tempo do Monitor mostrar só os passos e as exceções.
