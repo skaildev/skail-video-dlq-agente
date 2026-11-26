@@ -10,7 +10,7 @@ O LLM, o estoque, o ERP e o e-mail são serviços simulados (`src/Simuladores`),
 
 - `src/AgenteDePedidos`: o workload `dlqagente:v1.0.0`, com duas functions.
   - `ProcessarPedido` trata cada tipo de falha do jeito que o vídeo mostra. A function tem `retryCount: 3` em vez dos 15 padrão, para a execução do bloco 3 chegar na DLQ em minutos.
-  - `ProcessarPedidoRetryPadrao` usa o retry padrão nos commands e lança exceção para falha de negócio. Serve para ver no Monitor o que vai parar na dead letter queue sem precisar. Só a function dela tem `retryCount: 3` em vez dos 15 padrão: com o padrão, as reentregas têm intervalo crescente e a execução leva horas para chegar na DLQ.
+  - `ProcessarPedidoRetryPadrao` usa o retry padrão nos commands e lança exceção para falha de negócio. Serve para ver no Monitor as execuções que esgotam as tentativas e terminam em Falhou sem precisar. A function também tem `retryCount: 3`, pelo mesmo motivo da outra.
 - `src/Simuladores`: API em `http://localhost:5080` com a caixa de entrada, o LLM, o estoque, a média do cliente, o ERP (idempotente pelo header `Idempotency-Key`), a fila de revisão e o e-mail.
 - `scripts`: um script por bloco do vídeo, em PowerShell (`.ps1`) e bash (`.sh`), mais os scripts para disparar uma execução, trocar o modo dos simuladores e disparar a revisão.
 
@@ -65,7 +65,7 @@ O LLM, o estoque, o ERP e o e-mail são serviços simulados (`src/Simuladores`),
 
 | Bloco | Script | O que acontece |
 |---|---|---|
-| 1. Provedor do LLM fora do ar | `bloco1-provedor-fora` | O LLM responde 503. As execuções `ProcessarPedidoRetryPadrao` gastam as tentativas e vão para a dead letter queue. As `ProcessarPedido` ficam aguardando o delay de 2 minutos e concluem quando o LLM volta (`modo llm normal`). As que caíram na DLQ voltam com "Retentar tudo que casa com o filtro". |
+| 1. Provedor do LLM fora do ar | `bloco1-provedor-fora` | O LLM responde 503. As execuções `ProcessarPedidoRetryPadrao` esgotam as tentativas e terminam em Falhou. As `ProcessarPedido` ficam aguardando o delay de 2 minutos e concluem quando o LLM volta (`modo llm normal`). As que terminaram em Falhou voltam com Retentar no painel da execução. |
 | 2. Resposta inválida que se repete | `bloco2-resposta-invalida` | O LLM devolve o SKU 88412-X, que não existe. A versão com retry padrão repete a mesma exceção até cair na DLQ. A versão tratada fica aguardando o evento `PEDIDO_REVISADO`, que o `revisar` dispara. |
 | 3. Falha depois da ação | `bloco3-falha-depois-da-acao` | O pedido é criado no ERP e o e-mail estoura o timeout. Depois de `modo email normal`, o Retentar continua de `ResponderCliente`, e o ERP continua com um pedido só. |
 | 3. Falha depois da ação, versão de infraestrutura | `bloco3-aplicacao-cai` | Rode o agente com `manter-agente-no-ar`. O pedido é criado no ERP e a aplicação cai no `ResponderCliente`. O skail entrega a execução de novo uns 10 minutos depois de cada queda, e a cada entrega ela cai no mesmo passo. Depois de 5 entregas sem resposta, a execução vai para a Dead letter queue (no teste de 24/11/2026, o PED-3401 entrou na DLQ 1h50 depois do disparo). O ERP continua com um pedido só. Para retomar: `modo email normal` e Retentar na DLQ. |
